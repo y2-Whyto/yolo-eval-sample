@@ -49,7 +49,7 @@ model.export(format='onnx')
 
 ### Generate TRT File 
 ```shell
-python export.py  -o yolov11n.onnx -e yolov11n.trt --end2end --v10 -p fp32
+python export.py  -o yolov11n.onnx -e yolov11n.trt --end2end --v8 -p fp32
 ```
 ### Inference 
 ```shell
