@@ -123,7 +123,7 @@ class EngineBuilder:
         v8 = kwargs['v8']
         v10 = kwargs['v10']
         network_flags = (1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH))
-        class_agnostic = kwargs['class_agnostic']
+        class_agnostic = not kwargs['no_class_agnostic']
 
         self.network = self.builder.create_network(network_flags)
         self.parser = trt.OnnxParser(self.network, self.trt_logger)
@@ -320,7 +320,7 @@ class EngineBuilder:
 
 def main(args):
     builder = EngineBuilder(args.verbose, args.workspace)
-    builder.create_network(args.onnx, args.end2end, args.conf_thres, args.iou_thres, args.max_det, v8=args.v8, v10=args.v10)
+    builder.create_network(args.onnx, args.end2end, args.conf_thres, args.iou_thres, args.max_det, v8=args.v8, v10=args.v10, no_class_agnostic=args.no_class_agnostic)
     builder.create_engine(args.engine, args.precision, args.calib_input, args.calib_cache, args.calib_num_images,
                           args.calib_batch_size)
 
@@ -352,9 +352,8 @@ if __name__ == "__main__":
                         help="use yolov8/9 model, default: False")
     parser.add_argument("--v10", default=False, action="store_true",
                         help="use yolov10 model, default: False")
-    parser.add_argument("--no-class_agnostic", dest="class_agnostic", action="store_false",
+    parser.add_argument("--no_class_agnostic", default=False, action="store_true",
                         help="Disable class-agnostic NMS (default: enabled)")
-    parser.set_defaults(class_agnostic=True)
     args = parser.parse_args()
     print(args)
     if not all([args.onnx, args.engine]):
