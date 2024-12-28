@@ -216,8 +216,8 @@ class EngineBuilder:
                 starts[2] = 4
                 shapes[2] = num_classes
                 # [0, 0, 4] [1, 8400, 80] [1, 1, 1]
-                class_scores = self.network.add_slice(previous_output.get_output(0), starts, shapes, strides)
-                scores = self.network.add_reduce(class_scores.get_output(0), op=trt.ReduceOperation.MAX, axes=1 << 2,  keep_dims=True)
+                scores = self.network.add_slice(previous_output.get_output(0), starts, shapes, strides)
+                # scores = self.network.add_reduce(class_scores.get_output(0), op=trt.ReduceOperation.MAX, axes=1 << 2,  keep_dims=True)
             else:
                 # output [1, 8400, 85]
                 # slice boxes, obj_score, class_scores
