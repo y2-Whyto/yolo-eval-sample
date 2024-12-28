@@ -352,7 +352,7 @@ if __name__ == "__main__":
                         help="use yolov8/9 model, default: False")
     parser.add_argument("--v10", default=False, action="store_true",
                         help="use yolov10 model, default: False")
-    parser.add_argument("--no_class_agnostic", default=False, action="store_true",
+    parser.add_argument("--no-class_agnostic", default=False, action="store_true",
                         help="Disable class-agnostic NMS (default: enabled)")
     args = parser.parse_args()
     print(args)
