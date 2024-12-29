@@ -7,7 +7,7 @@ import numpy as np
 import tensorrt as trt
 from cuda import cudart
 
-from utils import common 
+from utils import common
 from image_batch import ImageBatcher
 
 logging.basicConfig(level=logging.INFO)
@@ -123,6 +123,7 @@ class EngineBuilder:
         v8 = kwargs['v8']
         v10 = kwargs['v10']
         network_flags = (1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH))
+        class_agnostic = not kwargs['no_class_agnostic']
 
         self.network = self.builder.create_network(network_flags)
         self.parser = trt.OnnxParser(self.network, self.trt_logger)
@@ -173,7 +174,7 @@ class EngineBuilder:
                 previous_output = self.network.add_shuffle(previous_output.get_output(0))
                 previous_output.reshape_dims    = reshape_dims
                 return previous_output
-            
+
             # 定义常量值和形状
             constant_value = 300.0
             constant_shape = (300,)
@@ -211,12 +212,12 @@ class EngineBuilder:
                 shapes = trt.Dims([bs, num_boxes, 4])
                 # [0, 0, 0] [1, 8400, 4] [1, 1, 1]
                 boxes = self.network.add_slice(previous_output.get_output(0), starts, shapes, strides)
-                num_classes = temp -4 
+                num_classes = temp -4
                 starts[2] = 4
                 shapes[2] = num_classes
                 # [0, 0, 4] [1, 8400, 80] [1, 1, 1]
-                class_scores = self.network.add_slice(previous_output.get_output(0), starts, shapes, strides)
-                scores = self.network.add_reduce(class_scores.get_output(0), op=trt.ReduceOperation.MAX, axes=1 << 2,  keep_dims=True)
+                scores = self.network.add_slice(previous_output.get_output(0), starts, shapes, strides)
+                # scores = self.network.add_reduce(class_scores.get_output(0), op=trt.ReduceOperation.MAX, axes=1 << 2,  keep_dims=True)
             else:
                 # output [1, 8400, 85]
                 # slice boxes, obj_score, class_scores
@@ -226,7 +227,7 @@ class EngineBuilder:
                 shapes = trt.Dims([bs, num_boxes, 4])
                 # [0, 0, 0] [1, 8400, 4] [1, 1, 1]
                 boxes = self.network.add_slice(previous_output, starts, shapes, strides)
-                num_classes = temp -5 
+                num_classes = temp -5
                 starts[2] = 4
                 shapes[2] = 1
                 # [0, 0, 4] [1, 8400, 1] [1, 1, 1]
@@ -257,8 +258,9 @@ class EngineBuilder:
             fc.append(trt.PluginField("iou_threshold", np.array([iou_thres], dtype=np.float32), trt.PluginFieldType.FLOAT32))
             fc.append(trt.PluginField("box_coding", np.array([1], dtype=np.int32), trt.PluginFieldType.INT32))
             fc.append(trt.PluginField("score_activation", np.array([0], dtype=np.int32), trt.PluginFieldType.INT32))
+            fc.append(trt.PluginField("class_agnostic", np.array([1 if class_agnostic else 0], dtype=np.int32), trt.PluginFieldType.INT32))
 
-            fc = trt.PluginFieldCollection(fc) 
+            fc = trt.PluginFieldCollection(fc)
             nms_layer = creator.create_plugin("nms_layer", fc)
 
             layer = self.network.add_plugin_v2([boxes.get_output(0), scores.get_output(0)], nms_layer)
@@ -318,7 +320,7 @@ class EngineBuilder:
 
 def main(args):
     builder = EngineBuilder(args.verbose, args.workspace)
-    builder.create_network(args.onnx, args.end2end, args.conf_thres, args.iou_thres, args.max_det, v8=args.v8, v10=args.v10)
+    builder.create_network(args.onnx, args.end2end, args.conf_thres, args.iou_thres, args.max_det, v8=args.v8, v10=args.v10, no_class_agnostic=args.no_class_agnostic)
     builder.create_engine(args.engine, args.precision, args.calib_input, args.calib_cache, args.calib_num_images,
                           args.calib_batch_size)
 
@@ -350,6 +352,8 @@ if __name__ == "__main__":
                         help="use yolov8/9 model, default: False")
     parser.add_argument("--v10", default=False, action="store_true",
                         help="use yolov10 model, default: False")
+    parser.add_argument("--no-class_agnostic", default=False, action="store_true",
+                        help="Disable class-agnostic NMS (default: enabled)")
     args = parser.parse_args()
     print(args)
     if not all([args.onnx, args.engine]):
@@ -360,7 +364,7 @@ if __name__ == "__main__":
         parser.print_help()
         log.error("When building in int8 precision, --calib_input or an existing --calib_cache file is required")
         sys.exit(1)
-    
+
     main(args)
 
 
