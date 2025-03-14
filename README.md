@@ -1,8 +1,9 @@
 # YOLO Series TensorRT Python/C++ 
 
 ## Support
-[YOLOv11](https://docs.ultralytics.com/)、[YOLOv10](https://github.com/THU-MIG/yolov10)、[YOLOv9](https://github.com/WongKinYiu/yolov9)、[YOLOv8](https://v8docs.ultralytics.com/)、[YOLOv7](https://github.com/WongKinYiu/yolov7)、[YOLOv6](https://github.com/meituan/YOLOv6)、 [YOLOX](https://github.com/Megvii-BaseDetection/YOLOX)、 [YOLOV5](https://github.com/ultralytics/yolov5)、[YOLOv3](https://github.com/ultralytics/yolov3)
+[YOLOv11, YOLOV12](https://docs.ultralytics.com/)、[YOLOv10](https://github.com/THU-MIG/yolov10)、[YOLOv9](https://github.com/WongKinYiu/yolov9)、[YOLOv8](https://v8docs.ultralytics.com/)、[YOLOv7](https://github.com/WongKinYiu/yolov7)、[YOLOv6](https://github.com/meituan/YOLOv6)、 [YOLOX](https://github.com/Megvii-BaseDetection/YOLOX)、 [YOLOV5](https://github.com/ultralytics/yolov5)、[YOLOv3](https://github.com/ultralytics/yolov3)
 
+- [x] YOLOv12
 - [x] YOLOv11
 - [x] YOLOv10
 - [x] YOLOv9
@@ -14,6 +15,7 @@
 - [x] YOLOv3 
 
 ## Update
+- 2025.3.14 Support YOLOv12
 - 2024.11.24 Support YOLOv11, fix the bug causing YOLOv8 accuracy misalignment 
 - 2024.6.16 Support YOLOv9, YOLOv10, changing the TensorRT version to 10.0 
 - 2023.8.15 Support cuda-python
@@ -35,6 +37,28 @@ pip install cuda-python
 
 [By Docker](https://github.com/NVIDIA/TensorRT/blob/main/docker/ubuntu-20.04.Dockerfile)
 
+## YOLO12
+### Export ONNX
+```shell
+pip install ultralytics
+```
+
+```Python
+from ultralytics import YOLO
+model = YOLO("yolo12n.pt")
+model.export(format='onnx')
+```
+
+### Generate TRT File 
+```shell
+python export.py  -o yolo112n.onnx -e yolo12n.trt --end2end --v8 -p fp32
+```
+### Inference 
+```shell
+python trt.py -e yolo12n.trt  -i src/1.jpg -o yolo12-1.jpg --end2end 
+```
+
+
 ## YOLO11
 ### Export ONNX
 ```shell
@@ -43,13 +67,13 @@ pip install ultralytics
 
 ```Python
 from ultralytics import YOLO
-model = YOLO("yolov11n.pt")
+model = YOLO("yolo11n.pt")
 model.export(format='onnx')
 ```
 
 ### Generate TRT File 
 ```shell
-python export.py  -o yolov11n.onnx -e yolov11n.trt --end2end --v8 -p fp32
+python export.py  -o yolo11n.onnx -e yolov11n.trt --end2end --v8 -p fp32
 ```
 ### Inference 
 ```shell
