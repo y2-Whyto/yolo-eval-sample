@@ -3,10 +3,6 @@ from cuda import cudart
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
-import time
-from pycocotools.coco import COCO
-from pycocotools.cocoeval import COCOeval
-import os
 
 from utils import common 
 
@@ -141,14 +137,7 @@ class BaseEngine(object):
         origin_img = cv2.imread(img_path)
         # img, ratio = preproc(origin_img, self.imgsz, self.mean, self.std)
         img, ratio, dwdh = letterbox(origin_img, self.imgsz)
-        
-        # Start timing for inference only
-        start_time = time.perf_counter()
         data = self.infer(img)
-        # End timing for inference
-        end_time = time.perf_counter()
-        inference_time = end_time - start_time
-
         if end2end:
             num, final_boxes, final_scores, final_cls_inds  = data
             # final_boxes, final_scores, final_cls_inds  = data
@@ -157,84 +146,22 @@ class BaseEngine(object):
             final_boxes = np.reshape(final_boxes/ratio, (-1, 4))
             final_scores = np.reshape(final_scores, (-1, 1))
             final_cls_inds = np.reshape(final_cls_inds, (-1, 1))
-            dets = np.concatenate([np.array(final_boxes)[:int(num[0])],
-                                   np.array(final_scores)[:int(num[0])],
-                                   np.array(final_cls_inds)[:int(num[0])]], axis=-1)
+            dets = np.concatenate([np.array(final_boxes)[:int(num[0])], np.array(final_scores)[:int(num[0])], np.array(final_cls_inds)[:int(num[0])]], axis=-1)
         else:
             predictions = np.reshape(data, (1, -1, int(5+self.n_classes)))[0]
-            
-            dets = self.postprocess(predictions, ratio, dwdh)
+            dets = self.postprocess(predictions,ratio)
 
-        # if dets is not None:
-        #     final_boxes, final_scores, final_cls_inds = dets[:,
-        #                                                      :4], dets[:, 4], dets[:, 5]
-        #     origin_img = vis(origin_img, final_boxes, final_scores, final_cls_inds,
-        #                      conf=conf, class_names=self.class_names)
-        # return origin_img
-        # dets: xyxy
-        return dets, inference_time  # Return detections and inference time
-
-
-    def evaluate_coco(self, img_paths, anno_file, conf=0.5, end2end=False):
-        """
-        Evaluate model performance on COCO dataset and compute mAP metrics.
-        
-        Args:
-            img_paths (list): List of image file paths.
-            anno_file (str): Path to COCO annotation file (e.g., instances_val2017.json).
-            conf (float): Confidence threshold for detections.
-            end2end (bool): Whether to use end-to-end engine output format.
-        """
-        coco = COCO(anno_file)  # Load ground truth annotations
-        
-        total_inference_time = 0.0
-        detections = []
-        
-        for img_path in img_paths:
-            dets, inference_time = self.inference(img_path, conf, end2end)
-            total_inference_time += inference_time
-            
-            # Extract image ID from filename (assuming ID is the filename without extension)
-            img_id = int(os.path.basename(img_path).split('.')[0])
-            
-            if dets is not None:
-                for det in dets:
-                    bbox = det[:4]  # [x_min, y_min, x_max, y_max]
-                    score = det[4]
-                    # category_id = int(det[5]) + 1  # COCO category IDs start from 1
-                    category_id = COCO_CATEGORY_IDS[int(det[5])]
-                    # Convert to COCO format: [x, y, width, height]
-                    coco_bbox = [bbox[0], bbox[1], bbox[2] - bbox[0], bbox[3] - bbox[1]]
-                    detections.append({
-                        'image_id': img_id,
-                        'category_id': category_id,
-                        'bbox': coco_bbox,
-                        'score': float(score)
-                    })
-        
-        # Load detection results into COCO format
-        coco_dt = coco.loadRes(detections)
-        
-        # Run COCO evaluation
-        coco_eval = COCOeval(coco, coco_dt, 'bbox')
-        coco_eval.evaluate()
-        coco_eval.accumulate()
-        coco_eval.summarize()
-        
-        # Compute and print average inference time
-        avg_inference_time = total_inference_time / len(img_paths) if img_paths else 0
-        print(f"Average inference time (excluding pre/post-processing): {avg_inference_time:.4f} seconds")
+        if dets is not None:
+            final_boxes, final_scores, final_cls_inds = dets[:,
+                                                             :4], dets[:, 4], dets[:, 5]
+            origin_img = vis(origin_img, final_boxes, final_scores, final_cls_inds,
+                             conf=conf, class_names=self.class_names)
+        return origin_img
 
     @staticmethod
-    def postprocess(predictions, ratio, dwdh=None):
-        boxes = predictions[:, :4]  # x0y0wh
+    def postprocess(predictions, ratio):
+        boxes = predictions[:, :4]
         scores = predictions[:, 4:5] * predictions[:, 5:]
-        
-        # dispadding
-        if dwdh is not None:
-            boxes[:, 0] -= dwdh[0]
-            boxes[:, 1] -= dwdh[1]
-        
         boxes_xyxy = np.ones_like(boxes)
         boxes_xyxy[:, 0] = boxes[:, 0] - boxes[:, 2] / 2.
         boxes_xyxy[:, 1] = boxes[:, 1] - boxes[:, 3] / 2.
@@ -288,6 +215,7 @@ def nms(boxes, scores, nms_thr):
 
 
 def multiclass_nms(boxes, scores, nms_thr, score_thr):
+    # boxes: xyxy
     """Multiclass NMS implemented in Numpy"""
     final_dets = []
     num_classes = scores.shape[1]
@@ -302,7 +230,6 @@ def multiclass_nms(boxes, scores, nms_thr, score_thr):
             keep = nms(valid_boxes, valid_scores, nms_thr)
             if len(keep) > 0:
                 cls_inds = np.ones((len(keep), 1)) * cls_ind
-                # xyxy
                 dets = np.concatenate(
                     [valid_boxes[keep], valid_scores[keep, None], cls_inds], 1
                 )
@@ -338,7 +265,7 @@ def preproc(image, input_size, mean, std, swap=(2, 0, 1)):
     padded_img = np.ascontiguousarray(padded_img, dtype=np.float32)
     return padded_img, r
 
-def letterbox(im,
+def  letterbox(im,
               new_shape = (640, 640),
               color = (114, 114, 114),
               swap=(2, 0, 1)):
@@ -373,11 +300,6 @@ def letterbox(im,
     im = np.ascontiguousarray(im, dtype=np.float32) / 255.
     return im, r, (dw, dh)
 
-COCO_CATEGORY_IDS = [
-    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 27, 28, 31, 32, 33, 34,
-    35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
-    64, 65, 67, 70, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 84, 85, 86, 87, 88, 89, 90
-]
 
 def rainbow_fill(size=50):  # simpler way to generate rainbow color
     cmap = plt.get_cmap('jet')
